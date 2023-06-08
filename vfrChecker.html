@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Weather Information</title>
+  <style>
+
+/* CSS styles */
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: #f8f8f8;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  background-color: #ffffff;
+  border-radius: 5px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.station-container {
+  width: 800px; /* Adjust the value as per your preference */
+  margin-bottom: 20px;
+  padding: 15px;
+  background-color: #f5f5f5;
+  border-radius: 5px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+
+.weather-item {
+  margin-bottom: 10px;
+}
+
+.weather-label {
+  font-weight: bold;
+}
+
+/* Color classes */
+.vfr {
+  color: green;
+}
+
+.marginal-vfr {
+  color: orange;
+}
+
+.imc {
+  color: red;
+}
+
+.wind-caution {
+  color: purple;
+}
+
+h1 {
+  text-align: center;
+  color: #333333;
+  margin-bottom: 20px;
+}
+
+.weather-item {
+  border-bottom: 1px solid #dddddd;
+  padding-bottom: 10px;
+}
+
+.weather-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.weather-label {
+  color: #555555;
+}
+
+.weather-item p {
+  margin: 5px 0;
+}
+
+.weather-item p:last-child {
+  margin-bottom: 0;
+}
+
+.weather-label::after {
+  content: ":";
+}
+
+.weather-label,
+.conditions-text {
+  font-size: 14px;
+}
+
+.conditions-text {
+  font-weight: bold;
+  text-transform: uppercase;
+  margin-top: 8px;
+}
+
+.conditions-text span {
+  padding: 3px 5px;
+  border-radius: 4px;
+}
+
+.vfr-text {
+  background-color: #80e27e;
+  color: #ffffff;
+}
+
+.marginal-vfr-text {
+  background-color: #fdd835;
+  color: #333333;
+}
+
+.imc-text {
+  background-color: #e57373;
+  color: #ffffff;
+}
+
+.wind-caution-text {
+  background-color: #9575cd;
+  color: #ffffff;
+}
+
+#refreshButton {
+  background-color: #555555;
+  color: #ffffff;
+  border: none;
+  padding: 10px 20px;
+  font-size: 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  margin-bottom: 20px;
+  width: 400px;
+}
+
+#refreshButton:hover {
+  background-color: #333333;
+}
+
+
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Aviation Weather</h1>
+    <button id="refreshButton">Refresh</button>
+
+    <div id="weatherItems"></div>
+  </div>
+
+  <script>
+    // JavaScript code
+    const stationString = 'NZAA,NZWN,NZCH';
+    const proxyUrl = 'https://api.allorigins.win/get?url='; // Proxy server URL
+    const apiUrl = `https://www.aviationweather.gov/adds/dataserver_current/httpparam?datasource=metars&requestType=retrieve&format=xml&mostRecentForEachStation=constraint&hoursBeforeNow=1.25&stationString=${stationString}`;
+
+    const refreshButton = document.getElementById('refreshButton');
+  refreshButton.addEventListener('click', fetchData);
+
+  function fetchData() {
+    fetch(proxyUrl + encodeURIComponent(apiUrl))
+      .then(response => response.json())
+      .then(result => {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(result.contents, 'application/xml');
+
+        const metars = Array.from(xmlDoc.getElementsByTagName('METAR'));
+
+        const weatherItemsContainer = document.getElementById('weatherItems');
+
+        metars.forEach(metar => {
+          const skyCondition = metar.querySelector('sky_condition');
+          const station = metar.querySelector('station_id').textContent;
+          const temperature = metar.querySelector('temp_c').textContent;
+          const windSpeed = metar.querySelector('wind_speed_kt').textContent;
+          const windDirDegrees = metar.querySelector('wind_dir_degrees').textContent;
+          const visibility = metar.querySelector('visibility_statute_mi').textContent;
+          const skyCover = skyCondition.getAttribute('sky_cover');
+          const cloudBase = skyCondition.getAttribute('cloud_base_ft_agl');
+
+          const conditions = checkWeatherConditions(parseFloat(visibility), cloudBase, parseFloat(windSpeed));
+
+          const stationContainer = document.createElement('div');
+          stationContainer.classList.add('station-container');
+
+          const altimeterObject = metar.querySelector('altim_in_hg');
+          const altimeterValue = altimeterObject ? altimeterObject.textContent : null;
+          const hpaValue = altimeterValue ? (parseFloat(altimeterValue) / 0.029529983071445).toFixed(0) : 'N/A';
+
+          const visibilityObject = metar.querySelector('visibility_statute_mi');
+          const visibilityValue = visibilityObject ? parseFloat(visibilityObject.textContent) : null;
+          const visibilityKilometers = visibilityValue ? (visibilityValue * 1.60934).toFixed(2) : 'N/A';
+
+          const stationHeading = document.createElement('h2');
+          stationHeading.innerText = station;
+          stationContainer.appendChild(stationHeading);
+
+          const weatherItem = document.createElement('div');
+          weatherItem.classList.add('weather-item');
+
+          const temperatureElement = document.createElement('p');
+          temperatureElement.innerHTML = `<span class="weather-label">Temperature</span> ${temperature}`;
+          weatherItem.appendChild(temperatureElement);
+
+          const windSpeedElement = document.createElement('p');
+          windSpeedElement.innerHTML = `<span class="weather-label">Wind Speed</span> ${windSpeed}`;
+          weatherItem.appendChild(windSpeedElement);
+
+          const windDirDegreesElement = document.createElement('p');
+          windDirDegreesElement.innerHTML = `<span class="weather-label">Wind Direction (degrees)</span> ${windDirDegrees}`;
+          weatherItem.appendChild(windDirDegreesElement);
+
+          const visibilityElement = document.createElement('p');
+          visibilityElement.innerHTML = `<span class="weather-label">Visibility</span> ${visibilityKilometers} km`;
+          weatherItem.appendChild(visibilityElement);
+
+          const skyConditionsElement = document.createElement('p');
+          skyConditionsElement.innerHTML = `<span class="weather-label">Sky Conditions</span> ${skyCover}`;
+          weatherItem.appendChild(skyConditionsElement);
+
+          const cloudBaseElement = document.createElement('p');
+          cloudBaseElement.innerHTML = `<span class="weather-label">Cloud Base (ft AGL)</span> ${cloudBase || 'N/A'}`;
+          weatherItem.appendChild(cloudBaseElement);
+
+          const altimeterElement = document.createElement('p');
+          altimeterElement.innerHTML = `<span class="weather-label">Altimeter:</span> ${hpaValue} hPa`;
+          weatherItem.appendChild(altimeterElement);
+
+          const conditionsElement = document.createElement('p');
+          conditionsElement.innerHTML = `<span class="weather-label">Conditions:</span> ${getConditionsText(conditions)}`;
+          weatherItem.appendChild(conditionsElement);
+
+          weatherItem.classList.add(getWeatherConditionClass(conditions));
+
+          stationContainer.appendChild(weatherItem);
+
+          weatherItemsContainer.appendChild(stationContainer);
+        });
+      })
+      .catch(error => {
+        console.error('Error:', error);
+      });
+
+      function checkWeatherConditions(visibility, cloudBase, windSpeed, skyCover) {
+    const conditions = {
+      VFR: false,
+      MarginalVFR: false,
+      IMC: false,
+      windCaution: false
+    };
+  
+    if (visibility <= 5) {
+      conditions.IMC = true;
+  
+    } else if (isNaN(parseFloat(cloudBase))) {
+      if (windSpeed <= 25) {
+        conditions.VFR = true;
+      }
+    } else if (cloudBase === 'N/A') {
+      if (windSpeed <= 25) {
+        conditions.VFR = true;
+      }
+  
+     else if (cloudBase < 3500 && (skyCover === 'BKN' || skyCover === 'OVC')) {
+    conditions.IMC = true;
+  
+    } else if (cloudBase < 1500) {
+    conditions.MarginalVFR = true;
+    }
+  
+    } else if (visibility >= 5 && cloudBase <= 2000) {
+      conditions.MarginalVFR = true;
+  
+    } else if (cloudBase > 2000 && windSpeed <= 25) {
+      conditions.VFR = true;
+    }
+  
+    if (windSpeed > 25) {
+      conditions.windCaution = true;
+    }
+  
+    return conditions;
+  }
+
+
+    function getConditionsText(conditions) {
+      if (conditions.IMC) {
+        return 'IMC Weather';
+      } else if (conditions.MarginalVFR) {
+        return 'Marginal VFR Weather';
+      } else if (conditions.VFR) {
+        return 'VFR Weather';
+      } else if (conditions.windCaution) {
+        return 'Wind Caution';
+      } else {
+        return 'Unknown';
+      }
+    }
+  }
+
+        // Function to get the CSS class based on weather conditions
+        function getWeatherConditionClass(conditions) {
+      if (conditions.IMC) {
+        return 'imc';
+      }
+      if (conditions.MarginalVFR) {
+        return 'marginal-vfr';
+      }
+      if (conditions.VFR) {
+        return 'vfr';
+      }
+      if (conditions.windCaution) {
+        return 'wind-caution';
+      }
+      return '';
+    }
+
+  </script>
+</body>
+</html>
